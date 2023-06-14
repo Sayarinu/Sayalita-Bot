@@ -11,7 +11,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 async def on_ready():
     print(f'Logged in as {bot.user.name} ({bot.user.id})')
 
-with open('token.txt', 'r') as file:
+with open('Bot/Scripts/token.txt', 'r') as file:
     token = file.read()
 
 bot.run(token)
