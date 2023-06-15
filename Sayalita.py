@@ -42,6 +42,7 @@ async def on_ready():
         for channel in guild.text_channels:
             text_channels.append(channel.id)
 
+    initialize_users()
     bot.loop.create_task(every_minute())
 
 async def every_minute():
@@ -80,6 +81,21 @@ async def on_voice_state_update(member, before, after):
         viewers[before.channel.id].remove(user)
         if user in streaming:
             streaming.pop(user)
+
+def initialize_users():
+    for i in range(len(voice_channels)):
+        channel = bot.get_channel(voice_channels[i])
+        members = channel.members
+        member_names = [member.id for member in members]
+        member_voices = [member.voice for member in members]
+        for i in range(len(member_names)):
+            points[member_names[i]] = {}
+        viewers[channel.id] = member_names
+        for i in range(len(member_voices)):
+            if member_voices[i].self_stream:
+                streaming[member_names[i]] = channel.id
+
+
 
 # Gets all of the people streaming in the given channel
 def update_points():
