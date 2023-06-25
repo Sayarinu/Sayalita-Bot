@@ -8,6 +8,10 @@ class Wagers:
         self.optionOne = {}
         self.optionTwo = {}
 
+    def __str__(self):
+        return f"wagerID: {self.wagerID}\nStreamerID: {self.ownerID}\nDescription: {self.desc}\n" \
+               f"Options: (1) - {self.optionOneDesc} / (2) - {self.optionTwoDesc}"
+
     def addWager(self, user, amount, option):
         if option == 1:
             if user not in self.optionOne:
