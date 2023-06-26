@@ -7,6 +7,7 @@ class Wagers:
         self.ownerID = owner
         self.optionOne = {}
         self.optionTwo = {}
+        self.timer = 0
 
     def __str__(self):
         return f"wagerID: {self.wagerID}\nStreamerID: {self.ownerID}\nDescription: {self.desc}\n" \
@@ -17,10 +18,14 @@ class Wagers:
             if user not in self.optionOne:
                 self.optionOne[user] = amount
             else:
-                self.optioNTwo[user] += amount
+                self.optionOne[user] += amount
         elif option == 2:
             if user not in self.optionTwo:
                 self.optionTwo[user] = amount
             else:
                 self.optionTwo[user] += amount
         return option == 1 or option == 2
+
+    def increaseTimer(self):
+        if self.timer < 3:
+            self.timer += 1

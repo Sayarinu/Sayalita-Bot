@@ -56,6 +56,7 @@ async def on_ready():
 
     initialize_users()
     bot.loop.create_task(every_minute())
+    await bot.change_presence(activity=discord.Game(name='Points Bot \ !commands'))
 
 # Checks if someone joins the call, if they leave the call or if they start or stop streaming
 @bot.event
@@ -91,17 +92,18 @@ async def on_voice_state_update(member, before, after):
 # Bot Commands
 @bot.command()
 async def commands(ctx):
-    message = "### COMMANDS\n" \
-              " ``` " \
-              "!wagerStart discordHandle \"Description\" \"Outcome 1\" \"Outcome 2\"\n\t(Starts a wager on a streamer)\n" \
-              "!betWager discordHandle amount ID outcome\n\t(Lets you place a bet on a streamer)\n" \
-              "!balance\n\t(lists the balances of all streamers you have points for)\n" \
+    message = "```* COMMANDS *\n" \
+              "!wStart discordHandle \"Description\" \"Outcome 1\" \"Outcome 2\"\n\t(Starts a wager on a streamer)\n" \
+              "!wBet discordHandle amount ID outcome\n\t(Lets you place a bet on a streamer)\n" \
+              "!wBalance\n\t(lists the balances of all streamers you have points for)\n" \
+              "!wEnd ID outcome\n\t(Ends the wager with the given ID)\n\t(1 for outcome 1, 2 for outcome 2, 3 for cancel)\n" \
+              "!wList\n\t(Lists all current wagers)" \
               "```"
     await ctx.send(message)
 
 
 @bot.command()
-async def betWager(ctx, user_handle: str, amount: int, wager: int, option: int): # !wager [user_handle] [amount] [wagerID] [option]
+async def wBet(ctx, user_handle: str, amount: int, wager: int, option: int): # !wager [user_handle] [amount] [wagerID] [option]
     if amount <= 0:
         raise commands.CommandError("Amount must be an integer greater than 0.")
 
@@ -109,48 +111,73 @@ async def betWager(ctx, user_handle: str, amount: int, wager: int, option: int):
     user = get_user(user_handle)
     if isinstance(user, discord.user.User):
         if author.id == user.id:
-            raise commands.CommandError("Cannot call wager on self.")
+            await ctx.send("Cannot call wager on self.")
+            return
 
         if points[author.id][user.id] < amount:
-            raise commands.CommandError(f'Amount exceeds points you have for {user.global_name}')
+            await ctx.send(f'Amount exceeds points you have for {user.global_name}')
+            return
 
         if option != 1 and option != 2:
-            raise commands.CommandError("Invalid side, please choose 1 or 2")
+            await ctx.send("Invalid side, please choose 1 or 2")
+            return
 
         if wager not in wagers[user.id]:
-            raise commands.CommandError("Invalid wagerID, please input correct wager ID")
+            await ctx.send("Invalid wagerID, please input correct wager ID")
+            return
 
+        if wagers[user.id][wager].timer == 3:
+            await ctx.send("The time to place a bet has closed")
+            return
+
+        if option == 1:
+            if author.id in wagers[user.id][wager].optionTwo:
+                await ctx.send("Cannot bet on both sides")
+                return
+        elif option == 2:
+            if author.id in wagers[user.id][wager].optionOne:
+                await ctx.send("Cannot bet on both sides")
+                return
         wagers[user.id][wager].addWager(author.id, amount, option)
         points[author.id][user.id] -= amount
 
+        if option == 1:
+            await ctx.send(f'Wager placed on {user.global_name} for a total of {wagers[user.id][wager].optionOne[author.id]}')
+        elif option == 2:
+            await ctx.send(f'Wager placed on {user.global_name} for a total of {wagers[user.id][wager].optionTwo[author.id]}')
+
 @bot.command()
-async def endWager(ctx, wager: int, outcome: int):
+async def wEnd(ctx, index: int, outcome: int):
     if len(wagers[ctx.author.id]) == 0:
         await ctx.send("You have no wagers to end")
         return
 
-    elif wager not in wagers[ctx.author.id]:
+    elif index not in wagers[ctx.author.id]:
         await ctx.send("Invalid wager ID")
         return
 
     if outcome == 1 or outcome == 2 or outcome == 3:
         if outcome == 3:
-            cancelWager(ctx.author.id, wager)
+            cancelWager(ctx.author.id, index)
+            del wagers[ctx.author.id][index]
+            if len(wagers[ctx.author.id]) == 0:
+                del wagers[ctx.author.id]
         else:
-            payWinners(outcome, ctx.author.id, wager)
+            payWinners(outcome, ctx.author.id, index)
     else:
         await ctx.send("Invalid outcome, please enter outcome: 1, 2 or 3 for cancel wager")
         return
 
 
 @bot.command()
-async def wagerStart(ctx, streamer: str, desc: str, one: str, two: str): # !wagerStart "streamer" "Desc" "One" "Two"
+async def wStart(ctx, streamer: str, desc: str, one: str, two: str): # !wagerStart "streamer" "Desc" "One" "Two"
     global wagers
     global wager_count
     user = get_user(streamer)
 
     if user.id not in streaming:
         await ctx.send(f'{user.global_name} is not streaming')
+        return
 
     if user.id not in wagers:
         wagers[user.id] = {}
@@ -160,9 +187,9 @@ async def wagerStart(ctx, streamer: str, desc: str, one: str, two: str): # !wage
 
     newWager = Wagers(desc, wager_count, one, two, user.id)
     wagers[user.id][wager_count] = newWager
-    wager_count += 1
 
-    await ctx.send(f'Wager started:\n{wagers[user.id][wagerID]}')
+    await ctx.send(f'Wager started:\n{wagers[user.id][wager_count]}')
+    wager_count += 1
 
 @bot.command()
 async def stopBot(ctx):
@@ -170,24 +197,34 @@ async def stopBot(ctx):
         cancelAllWagers()
         save_points()
         await bot.close()
+    else:
+        await ctx.send("Access Denied")
 
 @bot.command()
-async def balance(ctx):
+async def wList(ctx):
+    message = ""
+    for streamer, wagersList in wagers.items():
+        name = await bot.fetch_user(streamer)
+        message += f'{name}\'s current wagers\n'
+        for streamersWagers, description in wagers[streamer].items():
+            message += f'* {description}\n'
+
+    await ctx.send(f'```Ongoing Wagers\n {message}\n```')
+
+@bot.command()
+async def wBalance(ctx):
     message = ""
     for streamer, amount in points[ctx.author.id].items():
         name = await bot.fetch_user(streamer)
         message += f' - {name}: {amount}\n'
-    await ctx.send(f'# {ctx.author.name}\'s Points\n```{message}```')
+    await ctx.send(f'# {ctx.author.name}\'s Points\n```{message}\n```')
 
 @bot.command()
 async def save(ctx):
     if ctx.author.id == stopUser:
         save_points()
-
-@betWager.error
-async def wager_error(ctx, error):
-    if isinstance(error, commands.CommandError):
-        await ctx.send(str(error))
+    else:
+        await ctx.send("Access Denied")
 
 def initialize_users():
     '''
@@ -247,24 +284,27 @@ def cancelWager(streamer, number):
     for user, amount in wagers[streamer][number].optionTwo.items():
         points[user][streamer] += amount
 
-def payWinners(outcome, streamer, wager):
+def payWinners(outcome, streamer, index):
     totalOne, totalTwo = 0, 0
-    for user, amount in wagers[streamer][wager].optionOne.items():
+    for user, amount in wagers[streamer][index].optionOne.items():
         totalOne += amount
-    for user, amount in wagers[streamer][wager].optionTwo.items():
+    for user, amount in wagers[streamer][index].optionTwo.items():
         totalTwo += amount
     if outcome == 1:
-        payout = 1.5
-        if totalTwo < .2 * totalOne:
-            payout = 1 + totalTwo / totalOne
-        for user, amount in wagers[streamer][wager].optionOne.items():
-            points[user][streamer] += int(payout * amount)
+        if totalOne != 0:
+            payout = 1.2
+            if totalTwo > .2 * totalOne:
+                payout = 1 + totalTwo / totalOne
+            for user, amount in wagers[streamer][index].optionOne.items():
+                points[user][streamer] += int(payout * amount)
     else:
-        if totalOne < .2 * totalTwo:
-            payout = 1 + totalOne / totalTwo
-        for user, amount in wagers[streamer][wager].optionTwo.items():
-            points[user][streamer] += int(payout * amount)
-    del wagers[streamer][wager]
+        if totalTwo != 0:
+            payout = 1.2
+            if totalOne > .2 * totalTwo:
+                payout = 1 + totalOne / totalTwo
+            for user, amount in wagers[streamer][wager].optionTwo.items():
+                points[user][streamer] += int(payout * amount)
+    del wagers[streamer][index]
     if len(wagers[streamer]) == 0:
         del wagers[streamer]
 
@@ -286,7 +326,6 @@ def save_points():
         file.truncate()
         json.dump(points, file)
     file.close()
-    print(points)
 
 # Gets a user object from handle
 def get_user(handle):
@@ -296,11 +335,19 @@ def get_user(handle):
         user = discord.utils.get(bot.users, name=name, discriminator=discriminator)
     return user
 
+def updateWagerTimers():
+    for streamer, wager in wagers.items():
+        for number, bet in wagers[streamer].items():
+            wagers[streamer][number].increaseTimer()
+
+
 # Called every minute
 async def every_minute():
     while True:
         await asyncio.sleep(60)  # Wait for 1 minute
         update_points()
+        updateWagerTimers()
+
 
 
 # Runs the bot with the token
