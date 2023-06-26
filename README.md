@@ -1,5 +1,4 @@
 # Sayalita Bot
-Discord Bot made by Sayarin
 
 Discord Bot that allows you and your friends to make wagers on each other and collect points to use.
 
