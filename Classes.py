@@ -6,7 +6,9 @@ class Wagers:
         self.optionTwoDesc = option_two
         self.ownerID = owner
         self.optionOne = {}
+        self.optionOneTotal = 0
         self.optionTwo = {}
+        self.optionTwoTotal = 0
         self.timer = 0
 
     def __str__(self):
@@ -15,11 +17,13 @@ class Wagers:
 
     def addWager(self, user, amount, option):
         if option == 1:
+            self.optionOneTotal += amount
             if user not in self.optionOne:
                 self.optionOne[user] = amount
             else:
                 self.optionOne[user] += amount
         elif option == 2:
+            self.optionTwoTotal += amount
             if user not in self.optionTwo:
                 self.optionTwo[user] = amount
             else:

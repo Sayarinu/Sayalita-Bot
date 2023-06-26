@@ -98,6 +98,7 @@ async def commands(ctx):
               "!wBalance\n\t(lists the balances of all streamers you have points for)\n" \
               "!wEnd ID outcome\n\t(Ends the wager with the given ID)\n\t(1 for outcome 1, 2 for outcome 2, 3 for cancel)\n" \
               "!wList\n\t(Lists all current wagers)" \
+              "!wPayout discordHandle ID\n\t(Shows the payouts for the streamers bet with the existing ID)" \
               "```"
     await ctx.send(message)
 
@@ -162,6 +163,7 @@ async def wEnd(ctx, index: int, outcome: int):
             del wagers[ctx.author.id][index]
             if len(wagers[ctx.author.id]) == 0:
                 del wagers[ctx.author.id]
+            await ctx.send("The wager has been cancelled and points have been returned")
         else:
             winner = payWinners(outcome, ctx.author.id, index)
             if winner[1] != 0:
@@ -223,6 +225,21 @@ async def wBalance(ctx):
         name = await bot.fetch_user(streamer)
         message += f' - {name}: {amount}\n'
     await ctx.send(f'# {ctx.author.name}\'s Points\n```{message}\n```')
+
+@bot.command()
+async def wPayout(ctx, streamer: str, index: int):
+    user = getUser(streamer)
+    if isinstance(user, discord.user.User):
+        if index in wagers[user.id]:
+            if wagers[user.id][index].optionOneTotal != 0:
+                payoutOne = max(1.2, wagers[user.id][index].optionTwoTotal / wagers[user.id][index].optionOneTotal)
+            else:
+                payoutOne = 1.2
+            if wagers[user.id][index].optionTwoTotal != 0:
+                payoutTwo = max(1.2, wagers[user.id][index].optionOneTotal / wagers[user.id][index].optionTwoTotal)
+            else:
+                payoutTwo = 1.2
+            await ctx.send(f'Payouts: (1) - {payoutOne} \ (2) - {payoutTwo}')
 
 @bot.command()
 async def save(ctx):
@@ -290,18 +307,11 @@ def cancelWager(streamer, number):
         points[user][streamer] += amount
 
 def payWinners(outcome, streamer, index):
-    totalOne, totalTwo = 0, 0
     maxPayout = 0
     maxWinner = 0
-    for user, amount in wagers[streamer][index].optionOne.items():
-        totalOne += amount
-    for user, amount in wagers[streamer][index].optionTwo.items():
-        totalTwo += amount
     if outcome == 1:
-        if totalOne != 0:
-            payout = 1.2
-            if totalTwo > .2 * totalOne:
-                payout = 1 + totalTwo / totalOne
+        if wagers[streamer][index].optionOneTotal != 0:
+            payout = max(1.2, wagers[streamer][index].optionTwoTotal / wagers[streamer][index].optionOneTotal)
             for user, amount in wagers[streamer][index].optionOne.items():
                 reward = int(payout * amount)
                 points[user][streamer] += reward
@@ -309,10 +319,8 @@ def payWinners(outcome, streamer, index):
                     maxPayout = reward
                     maxWinner = user
     else:
-        if totalTwo != 0:
-            payout = 1.2
-            if totalOne > .2 * totalTwo:
-                payout = 1 + totalOne / totalTwo
+        if wagers[streamer][index].optionTwoTotal != 0:
+            payout = max(1.2, wagers[streamer][index].optionOneTotal / wagers[streamer][index].optionTwoTotal)
             for user, amount in wagers[streamer][wager].optionTwo.items():
                 reward = int(payout * amount)
                 points[user][streamer] += reward
