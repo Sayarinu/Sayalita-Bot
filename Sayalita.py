@@ -54,8 +54,8 @@ async def on_ready():
         for channel in guild.text_channels:
             text_channels.append(channel.id)
 
-    initialize_users()
-    bot.loop.create_task(every_minute())
+    initializeUsers()
+    bot.loop.create_task(everyMinute())
     await bot.change_presence(activity=discord.Game(name='Points Bot \ !commands'))
 
 # Checks if someone joins the call, if they leave the call or if they start or stop streaming
@@ -108,7 +108,7 @@ async def wBet(ctx, user_handle: str, amount: int, wager: int, option: int): # !
         raise commands.CommandError("Amount must be an integer greater than 0.")
 
     author = ctx.author
-    user = get_user(user_handle)
+    user = getUser(user_handle)
     if isinstance(user, discord.user.User):
         if author.id == user.id:
             await ctx.send("Cannot call wager on self.")
@@ -163,7 +163,12 @@ async def wEnd(ctx, index: int, outcome: int):
             if len(wagers[ctx.author.id]) == 0:
                 del wagers[ctx.author.id]
         else:
-            payWinners(outcome, ctx.author.id, index)
+            winner = payWinners(outcome, ctx.author.id, index)
+            if winner[1] != 0:
+                name = await bot.fetch_user(winner[1])
+                await ctx.send(f'Payouts Complete: {name} had the largest payout with a total of {winner[0]} points!')
+            else:
+                await ctx.send("Payout Complete")
     else:
         await ctx.send("Invalid outcome, please enter outcome: 1, 2 or 3 for cancel wager")
         return
@@ -173,7 +178,7 @@ async def wEnd(ctx, index: int, outcome: int):
 async def wStart(ctx, streamer: str, desc: str, one: str, two: str): # !wagerStart "streamer" "Desc" "One" "Two"
     global wagers
     global wager_count
-    user = get_user(streamer)
+    user = getUser(streamer)
 
     if user.id not in streaming:
         await ctx.send(f'{user.global_name} is not streaming')
@@ -195,7 +200,7 @@ async def wStart(ctx, streamer: str, desc: str, one: str, two: str): # !wagerSta
 async def stopBot(ctx):
     if ctx.author.id == stopUser:
         cancelAllWagers()
-        save_points()
+        savePoints()
         await bot.close()
     else:
         await ctx.send("Access Denied")
@@ -222,11 +227,11 @@ async def wBalance(ctx):
 @bot.command()
 async def save(ctx):
     if ctx.author.id == stopUser:
-        save_points()
+        savePoints()
     else:
         await ctx.send("Access Denied")
 
-def initialize_users():
+def initializeUsers():
     '''
     Goes through all of the voice channels in the servers it is connected to and will then
     initialize all of the fields, called when the bot runs
@@ -252,7 +257,7 @@ def initialize_users():
                 streaming[member_names[j]] = channel.id
 
 # Gets all of the people streaming in the given channel
-def update_points():
+def updatePoints():
     for streamer in streaming: # streamer is the name of the streamer ; streaming[streamer] is the channel
         for view in range(len(viewers[streaming[streamer]])):
             if viewers[streaming[streamer]][view] != streamer: # use the viewer and compares if they are the one streaming
@@ -261,7 +266,7 @@ def update_points():
                 else:
                     points[viewers[streaming[streamer]][view]][streamer] += 10
 
-    save_points()
+    savePoints()
 
 # Initializes the points when reading in from the file
 def initialize(name):
@@ -269,7 +274,7 @@ def initialize(name):
     with open(points_file, "r") as file:
         data = json.load(file)
     file.close()
-    data = convert_keys_to_int(data)
+    data = convertKeysToInt(data)
 
     return data
 
@@ -286,6 +291,8 @@ def cancelWager(streamer, number):
 
 def payWinners(outcome, streamer, index):
     totalOne, totalTwo = 0, 0
+    maxPayout = 0
+    maxWinner = 0
     for user, amount in wagers[streamer][index].optionOne.items():
         totalOne += amount
     for user, amount in wagers[streamer][index].optionTwo.items():
@@ -296,39 +303,48 @@ def payWinners(outcome, streamer, index):
             if totalTwo > .2 * totalOne:
                 payout = 1 + totalTwo / totalOne
             for user, amount in wagers[streamer][index].optionOne.items():
-                points[user][streamer] += int(payout * amount)
+                reward = int(payout * amount)
+                points[user][streamer] += reward
+                if reward > maxPayout:
+                    maxPayout = reward
+                    maxWinner = user
     else:
         if totalTwo != 0:
             payout = 1.2
             if totalOne > .2 * totalTwo:
                 payout = 1 + totalOne / totalTwo
             for user, amount in wagers[streamer][wager].optionTwo.items():
-                points[user][streamer] += int(payout * amount)
+                reward = int(payout * amount)
+                points[user][streamer] += reward
+                if reward > maxPayout:
+                    maxPayout = reward
     del wagers[streamer][index]
     if len(wagers[streamer]) == 0:
         del wagers[streamer]
 
+    return maxPayout, maxWinner
+
 # Converts keys to integers (used for IDs from reading in from file)
-def convert_keys_to_int(diction):
+def convertKeysToInt(diction):
     converted_dict = {}
 
     for key, value in diction.items():
         new_key = int(key.strip("'"))
         if isinstance(value, dict):
-            value = convert_keys_to_int(value)
+            value = convertKeysToInt(value)
         converted_dict[new_key] = value
 
     return converted_dict
 
 # Saves the points to the file
-def save_points():
+def savePoints():
     with open(points_file, "w") as file:
         file.truncate()
         json.dump(points, file)
     file.close()
 
 # Gets a user object from handle
-def get_user(handle):
+def getUser(handle):
     user = discord.utils.get(bot.users, name=handle)
     if not isinstance(user, discord.user.User):
         name, discriminator = handle.split("#")
@@ -340,14 +356,12 @@ def updateWagerTimers():
         for number, bet in wagers[streamer].items():
             wagers[streamer][number].increaseTimer()
 
-
 # Called every minute
-async def every_minute():
+async def everyMinute():
     while True:
         await asyncio.sleep(60)  # Wait for 1 minute
-        update_points()
+        updatePoints()
         updateWagerTimers()
-
 
 
 # Runs the bot with the token
