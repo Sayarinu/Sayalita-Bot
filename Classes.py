@@ -1,3 +1,6 @@
+import datetime
+import time
+
 class Wagers:
     def __init__(self, desc: str, wager: int, option_one: str, option_two: str, owner: int):
         self.desc = desc
@@ -33,3 +36,17 @@ class Wagers:
     def increaseTimer(self):
         if self.timer < 3:
             self.timer += 1
+
+class Reminder:
+    def __init__(self, message, date_time, user_id):
+        self.message = message
+        self.date_time = date_time
+        self.user_id = user_id
+    
+    def __str__(self) -> str:
+        return f"Reminder for {self.date_time}: {self.message}"
+    
+
+    def is_due(self):
+        current_time = datetime.datetime.now()
+        return current_time >= self.date_time
