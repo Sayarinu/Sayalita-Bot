@@ -2,9 +2,9 @@ import discord
 import asyncio
 import json
 import os
+import Classes
 
-from Classes import Wagers
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 points_file = "points.json"
 wager_count = 0
@@ -22,11 +22,13 @@ points = {}
 # Stores the wagers for each streamer
 wagers = {}
 
+reminders = []
+
 # Reads in the token for the bot hidden in a different file for specific reasons
-with open('Bot/Scripts/token.txt', 'r') as file:
+with open('token.txt', 'r') as file:
     token = file.read()
 file.close()
-with open('Bot/Scripts/stop.txt', 'r') as file:
+with open('stop.txt', 'r') as file:
     stopUser = int(file.read())
 file.close()
 
@@ -192,7 +194,7 @@ async def wStart(ctx, streamer: str, desc: str, one: str, two: str): # !wagerSta
     if len(wagers[user.id]) > 2:
         await ctx.send("Cannot start another wager for this streamer, please wait for other wagers to close")
 
-    newWager = Wagers(desc, wager_count, one, two, user.id)
+    newWager = Classes.Wagers(desc, wager_count, one, two, user.id)
     wagers[user.id][wager_count] = newWager
 
     await ctx.send(f'Wager started:\n{wagers[user.id][wager_count]}')
@@ -240,6 +242,30 @@ async def wPayout(ctx, streamer: str, index: int):
             else:
                 payoutTwo = 1.2
             await ctx.send(f'Payouts: (1) - {payoutOne} \ (2) - {payoutTwo}')
+
+@bot.command()
+async def sReminder(ctx, message, date_time):
+    try:
+        date_time = Classes.datetime.datetime.strptime(date_time, "%Y-%m-%d %H:%M")
+        reminder = Classes.Reminder(message, date_time, ctx.author)
+        reminders.append(reminder)
+        await ctx.send(f'Reminder set: {message} at {date_time.strftime("%Y-%m-%d %H:%M")}')
+    except ValueError:
+        await ctx.send('Invalid date and time format. Please use `YYYY-MM-DD HH:MM`.')
+
+@tasks.loop(seconds=60)
+async def check_reminders():
+    current_time = Classes.datetime.datetime.now()
+    for reminder in reminders:
+        if reminder.is_due():
+            user = bot.get_user(reminder.user.id)
+            if user:
+                await user.send(f'Reminder: {reminder.message}')
+            reminders.remove(reminder)
+
+@check_reminders.before_loop
+async def before_check_reminders():
+    await bot.wait_until_ready()
 
 @bot.command()
 async def save(ctx):
@@ -321,7 +347,7 @@ def payWinners(outcome, streamer, index):
     else:
         if wagers[streamer][index].optionTwoTotal != 0:
             payout = max(1.2, wagers[streamer][index].optionOneTotal / wagers[streamer][index].optionTwoTotal)
-            for user, amount in wagers[streamer][wager].optionTwo.items():
+            for user, amount in wagers[streamer][index].optionTwo.items():
                 reward = int(payout * amount)
                 points[user][streamer] += reward
                 if reward > maxPayout:
