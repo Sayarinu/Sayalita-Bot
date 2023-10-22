@@ -4,11 +4,10 @@ import os
 import Classes
 import FileReader
 import datetime as dt
+
 from colorama import Fore, Back, Style, init
 
 from discord.ext import commands, tasks
-# Name of file containing the points
-points_file = "points.json"
 # Stores the number of wagers that have been created
 wager_count = 0
 
@@ -42,8 +41,8 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 @bot.event
 async def on_ready() -> None:
     global points
-    if os.path.getsize(points_file) != 0:
-        points = FileReader.initialize(points_file)
+    if os.path.getsize("points.json") != 0:
+        points = FileReader.initialize()
     # when initialized gets a list of all channels and stores their ids
     for guild in bot.guilds:
         for channel in guild.text_channels:
@@ -205,11 +204,11 @@ async def wStart(ctx, streamer: str, desc: str, one: str, two: str) -> None: # !
 async def stopBot(ctx) -> None:
     if ctx.author.id == stopUser:
         await ctx.send("Stopping Bot")
-        print(f'{Fore.RED}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Cancelling All Wagers')
+        print(f'{Fore.GREEN}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Cancelling All Wagers')
         cancelAllWagers()
-        print(f'{Fore.RED}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Wagers Cancelled\n[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Saving Points')
-        FileReader.savePoints(points)
-        print(f'{Fore.RED}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Points Saved\n[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Closing Bot')
+        print(f'{Fore.CYAN}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Wagers Cancelled\n{Fore.MAGENTA}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Saving Points')
+        FileReader.save(points)
+        print(f'{Fore.WHITE}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Points Saved\n{Fore.YELLOW}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Closing Bot')
         await bot.close()
     else:
         await ctx.send("Access Denied")
@@ -280,14 +279,7 @@ async def check_reminders() -> None:
             if event.is_due():
                 channel = bot.get_channel(notifications_channel)
                 await channel.send(f'<@{user}> you have the following reminder:\n{event}')
-                del event
-
-@bot.command()
-async def save(ctx) -> None:
-    if ctx.author.id == stopUser:
-        FileReader.savePoints(points)
-    else:
-        await ctx.send("Access Denied")
+                reminders[user].remove(event)
 
 def initializeUsers() -> None:
     '''
@@ -300,7 +292,7 @@ def initializeUsers() -> None:
         member_names = [member.id for member in members]
         member_voices = [member.voice for member in members]
 
-        if os.path.getsize(points_file) == 0:
+        if os.path.getsize("points.json") == 0:
             for j in range(len(member_names)):
                 points[member_names[j]] = {}
 
@@ -324,7 +316,7 @@ def updatePoints() -> None:
                 else:
                     points[viewers[streaming[streamer]][view]][streamer] += 10
 
-    FileReader.savePoints(points)
+    FileReader.save(points)
 
 def cancelAllWagers()-> None: # Gets called only when turning off the bot 
     for streamer, wager in wagers.items():

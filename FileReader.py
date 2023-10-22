@@ -1,10 +1,10 @@
 import json
+import pickle
 
 from colorama import Fore, Back, Style, init
 from datetime import datetime as dt
 # Initialize colorama
 init(autoreset=True)
-points_file = "points.json"
 
 # Converts keys to integers (used for IDs from reading in from file)
 def convertKeysToInt(diction) -> dict:
@@ -36,18 +36,19 @@ def read_files() -> list:
     return [token, stopUser, notifications_channel]
 
 # Initializes the points when reading in from the file
-def initialize(name) -> dict:
+def initialize() -> dict:
     # Read the dictionary from the file
-    with open(points_file, "r") as file:
-        data = json.load(file)
+    with open("points.json", "r") as file:
+        points = json.load(file)
     file.close()
-    data = convertKeysToInt(data)
+    points = convertKeysToInt(points)
     print(f'{Fore.RED}[LOG {dt.now().strftime("%Y-%m-%d %H:%M:%S")}]: Initialized Channel Points')
-    return data
+    
+    return points
 
 # Saves the points to the file
-def savePoints(points: dict) -> None:
-    with open(points_file, "w") as file:
+def save(points: dict) -> None:
+    with open("points.json", "w") as file:
         file.truncate()
         json.dump(points, file)
     file.close()

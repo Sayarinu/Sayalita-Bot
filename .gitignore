@@ -5,3 +5,6 @@ token.txt
 riot_api_key.txt
 points.json
 reminders.json
+*.json
+points.json
+points.json
