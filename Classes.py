@@ -38,10 +38,14 @@ class Wagers:
             self.timer += 1
 
 class Reminder:
-    def __init__(self, message, date_time, user):
+    def __init__(self, message, date_time, user_id):
         self.message = message
         self.date_time = date_time
-        self.user = user
+        self.user_id = user_id
+    
+    def __str__(self) -> str:
+        return f"Reminder for {self.date_time}: {self.message}"
+    
 
     def is_due(self):
         current_time = datetime.datetime.now()

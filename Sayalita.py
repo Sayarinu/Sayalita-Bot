@@ -1,13 +1,19 @@
 import discord
 import asyncio
-import json
 import os
 import Classes
+import FileReader
+import datetime as dt
+from colorama import Fore, Back, Style, init
 
 from discord.ext import commands, tasks
-
+# Name of file containing the points
 points_file = "points.json"
+# Stores the number of wagers that have been created
 wager_count = 0
+
+# Initialize colorama
+init(autoreset=True)
 
 # Stores a dictionary of the user's who are streaming and the
 streaming = {}
@@ -21,16 +27,10 @@ voice_channels = []
 points = {}
 # Stores the wagers for each streamer
 wagers = {}
+# Stores users reminders
+reminders = {}
 
-reminders = []
-
-# Reads in the token for the bot hidden in a different file for specific reasons
-with open('token.txt', 'r') as file:
-    token = file.read()
-file.close()
-with open('stop.txt', 'r') as file:
-    stopUser = int(file.read())
-file.close()
+token, stopUser, notifications_channel = FileReader.read_files()
 
 # Gathers intents
 intents = discord.Intents.all()
@@ -40,10 +40,10 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 # Posts to a channel when joining for debugging
 @bot.event
-async def on_ready():
+async def on_ready() -> None:
     global points
     if os.path.getsize(points_file) != 0:
-        points = initialize(points_file)
+        points = FileReader.initialize(points_file)
     # when initialized gets a list of all channels and stores their ids
     for guild in bot.guilds:
         for channel in guild.text_channels:
@@ -57,12 +57,14 @@ async def on_ready():
             text_channels.append(channel.id)
 
     initializeUsers()
+    global token, stopUser, notifications_channel
     bot.loop.create_task(everyMinute())
     await bot.change_presence(activity=discord.Game(name='Points Bot \ !commands'))
+    print(f'{Fore.YELLOW}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Sayalita has connected to Discord!')
 
 # Checks if someone joins the call, if they leave the call or if they start or stop streaming
 @bot.event
-async def on_voice_state_update(member, before, after):
+async def on_voice_state_update(member, before, after) -> None:
     user = member.id
     # User either started or stopped streaming
     if before.channel is not None and after.channel is not None and before.self_stream != after.self_stream:
@@ -93,7 +95,7 @@ async def on_voice_state_update(member, before, after):
 
 # Bot Commands
 @bot.command()
-async def commands(ctx):
+async def commands(ctx) -> None:
     message = "```* COMMANDS *\n" \
               "!wStart discordHandle \"Description\" \"Outcome 1\" \"Outcome 2\"\n\t(Starts a wager on a streamer)\n" \
               "!wBet discordHandle amount ID outcome\n\t(Lets you place a bet on a streamer)\n" \
@@ -106,7 +108,7 @@ async def commands(ctx):
 
 
 @bot.command()
-async def wBet(ctx, user_handle: str, amount: int, wager: int, option: int): # !wager [user_handle] [amount] [wagerID] [option]
+async def wBet(ctx, user_handle: str, amount: int, wager: int, option: int) -> None: # !wager [user_handle] [amount] [wagerID] [option]
     if amount <= 0:
         raise commands.CommandError("Amount must be an integer greater than 0.")
 
@@ -150,7 +152,7 @@ async def wBet(ctx, user_handle: str, amount: int, wager: int, option: int): # !
             await ctx.send(f'Wager placed on {user.global_name} for a total of {wagers[user.id][wager].optionTwo[author.id]}')
 
 @bot.command()
-async def wEnd(ctx, index: int, outcome: int):
+async def wEnd(ctx, index: int, outcome: int) -> None:
     if len(wagers[ctx.author.id]) == 0:
         await ctx.send("You have no wagers to end")
         return
@@ -177,9 +179,8 @@ async def wEnd(ctx, index: int, outcome: int):
         await ctx.send("Invalid outcome, please enter outcome: 1, 2 or 3 for cancel wager")
         return
 
-
 @bot.command()
-async def wStart(ctx, streamer: str, desc: str, one: str, two: str): # !wagerStart "streamer" "Desc" "One" "Two"
+async def wStart(ctx, streamer: str, desc: str, one: str, two: str) -> None: # !wagerStart "streamer" "Desc" "One" "Two"
     global wagers
     global wager_count
     user = getUser(streamer)
@@ -201,16 +202,20 @@ async def wStart(ctx, streamer: str, desc: str, one: str, two: str): # !wagerSta
     wager_count += 1
 
 @bot.command()
-async def stopBot(ctx):
+async def stopBot(ctx) -> None:
     if ctx.author.id == stopUser:
+        await ctx.send("Stopping Bot")
+        print(f'{Fore.RED}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Cancelling All Wagers')
         cancelAllWagers()
-        savePoints()
+        print(f'{Fore.RED}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Wagers Cancelled\n[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Saving Points')
+        FileReader.savePoints(points)
+        print(f'{Fore.RED}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Points Saved\n[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Closing Bot')
         await bot.close()
     else:
         await ctx.send("Access Denied")
 
 @bot.command()
-async def wList(ctx):
+async def wList(ctx) -> None:
     message = ""
     for streamer, wagersList in wagers.items():
         name = await bot.fetch_user(streamer)
@@ -221,7 +226,7 @@ async def wList(ctx):
     await ctx.send(f'```Ongoing Wagers\n {message}\n```')
 
 @bot.command()
-async def wBalance(ctx):
+async def wBalance(ctx) -> None:
     message = ""
     for streamer, amount in points[ctx.author.id].items():
         name = await bot.fetch_user(streamer)
@@ -229,7 +234,7 @@ async def wBalance(ctx):
     await ctx.send(f'# {ctx.author.name}\'s Points\n```{message}\n```')
 
 @bot.command()
-async def wPayout(ctx, streamer: str, index: int):
+async def wPayout(ctx, streamer: str, index: int) -> None:
     user = getUser(streamer)
     if isinstance(user, discord.user.User):
         if index in wagers[user.id]:
@@ -244,37 +249,47 @@ async def wPayout(ctx, streamer: str, index: int):
             await ctx.send(f'Payouts: (1) - {payoutOne} \ (2) - {payoutTwo}')
 
 @bot.command()
-async def sReminder(ctx, message, date_time):
+async def sReminder(ctx, message, date_time) -> None:
     try:
-        date_time = Classes.datetime.datetime.strptime(date_time, "%Y-%m-%d %H:%M")
-        reminder = Classes.Reminder(message, date_time, ctx.author)
-        reminders.append(reminder)
+        date_time = dt.datetime.strptime(date_time, "%Y-%m-%d %H:%M")
+        reminder = Classes.Reminder(message, date_time, ctx.author.id)
+        if ctx.author.id in reminders:
+            reminders[ctx.author.id].append(reminder)
+        else:
+            reminders[ctx.author.id] = [reminder]
         await ctx.send(f'Reminder set: {message} at {date_time.strftime("%Y-%m-%d %H:%M")}')
     except ValueError:
         await ctx.send('Invalid date and time format. Please use `YYYY-MM-DD HH:MM`.')
 
-@tasks.loop(seconds=60)
-async def check_reminders():
-    current_time = Classes.datetime.datetime.now()
-    for reminder in reminders:
-        if reminder.is_due():
-            user = bot.get_user(reminder.user.id)
-            if user:
-                await user.send(f'Reminder: {reminder.message}')
-            reminders.remove(reminder)
+@bot.command()
+async def sWipe(ctx, amount: int):
+    # Check if the user has the "manage_messages" permission
+    if ctx.message.author.guild_permissions.manage_messages:
+        # Fetch the last `amount+1` messages in the channel (including the command message)
+        messages = await ctx.channel.history(limit=amount + 1).flatten()
+        # Delete the fetched messages
+        await ctx.channel.delete_messages(messages)
+        await ctx.send(f'Deleted {amount} messages.')
+    else:
+        await ctx.send("You don't have permission to manage messages.")
 
-@check_reminders.before_loop
-async def before_check_reminders():
-    await bot.wait_until_ready()
+async def check_reminders() -> None:
+    current_time = dt.datetime.now()
+    for user in reminders:
+        for event in reminders[user]:
+            if event.is_due():
+                channel = bot.get_channel(notifications_channel)
+                await channel.send(f'<@{user}> you have the following reminder:\n{event}')
+                del event
 
 @bot.command()
-async def save(ctx):
+async def save(ctx) -> None:
     if ctx.author.id == stopUser:
-        savePoints()
+        FileReader.savePoints(points)
     else:
         await ctx.send("Access Denied")
 
-def initializeUsers():
+def initializeUsers() -> None:
     '''
     Goes through all of the voice channels in the servers it is connected to and will then
     initialize all of the fields, called when the bot runs
@@ -300,7 +315,7 @@ def initializeUsers():
                 streaming[member_names[j]] = channel.id
 
 # Gets all of the people streaming in the given channel
-def updatePoints():
+def updatePoints() -> None:
     for streamer in streaming: # streamer is the name of the streamer ; streaming[streamer] is the channel
         for view in range(len(viewers[streaming[streamer]])):
             if viewers[streaming[streamer]][view] != streamer: # use the viewer and compares if they are the one streaming
@@ -309,19 +324,9 @@ def updatePoints():
                 else:
                     points[viewers[streaming[streamer]][view]][streamer] += 10
 
-    savePoints()
+    FileReader.savePoints(points)
 
-# Initializes the points when reading in from the file
-def initialize(name):
-    # Read the dictionary from the file
-    with open(points_file, "r") as file:
-        data = json.load(file)
-    file.close()
-    data = convertKeysToInt(data)
-
-    return data
-
-def cancelAllWagers(): # Gets called only when turning off the bot
+def cancelAllWagers()-> None: # Gets called only when turning off the bot 
     for streamer, wager in wagers.items():
         for number, bet in wagers[streamer].items():
             cancelWager(streamer, number)
@@ -332,7 +337,7 @@ def cancelWager(streamer, number):
     for user, amount in wagers[streamer][number].optionTwo.items():
         points[user][streamer] += amount
 
-def payWinners(outcome, streamer, index):
+def payWinners(outcome, streamer, index) -> tuple:
     maxPayout = 0
     maxWinner = 0
     if outcome == 1:
@@ -358,44 +363,27 @@ def payWinners(outcome, streamer, index):
 
     return maxPayout, maxWinner
 
-# Converts keys to integers (used for IDs from reading in from file)
-def convertKeysToInt(diction):
-    converted_dict = {}
-
-    for key, value in diction.items():
-        new_key = int(key.strip("'"))
-        if isinstance(value, dict):
-            value = convertKeysToInt(value)
-        converted_dict[new_key] = value
-
-    return converted_dict
-
-# Saves the points to the file
-def savePoints():
-    with open(points_file, "w") as file:
-        file.truncate()
-        json.dump(points, file)
-    file.close()
-
 # Gets a user object from handle
-def getUser(handle):
+def getUser(handle) -> discord.user.User:
     user = discord.utils.get(bot.users, name=handle)
     if not isinstance(user, discord.user.User):
         name, discriminator = handle.split("#")
         user = discord.utils.get(bot.users, name=name, discriminator=discriminator)
     return user
 
-def updateWagerTimers():
+def updateWagerTimers() -> None:
     for streamer, wager in wagers.items():
         for number, bet in wagers[streamer].items():
             wagers[streamer][number].increaseTimer()
 
 # Called every minute
-async def everyMinute():
+async def everyMinute() -> None:
+    print(f'{Fore.MAGENTA}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Running Minute Subroutine')
     while True:
         await asyncio.sleep(60)  # Wait for 1 minute
         updatePoints()
         updateWagerTimers()
+        await check_reminders()
 
 
 # Runs the bot with the token
