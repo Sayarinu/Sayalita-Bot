@@ -378,9 +378,9 @@ def updateWagerTimers() -> None:
 
 # Called every minute
 async def everyMinute() -> None:
-    print(f'{Fore.MAGENTA}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Running Minute Subroutine')
     while True:
         await asyncio.sleep(60)  # Wait for 1 minute
+        print(f'{Fore.MAGENTA}[LOG {dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}]: Running Minute Subroutine')
         updatePoints()
         updateWagerTimers()
         await check_reminders()
