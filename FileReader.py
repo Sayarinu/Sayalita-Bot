@@ -1,10 +1,14 @@
 import json
 import pickle
+import os
+from dotenv import load_dotenv
 
 from colorama import Fore, Back, Style, init
 from datetime import datetime as dt
 # Initialize colorama
 init(autoreset=True)
+
+load_dotenv()
 
 # Converts keys to integers (used for IDs from reading in from file)
 def convertKeysToInt(diction) -> dict:
@@ -20,19 +24,14 @@ def convertKeysToInt(diction) -> dict:
 
 # Reads in our API Keys, stopUser and ChannelID from a text file
 def read_files() -> list:
-    # Reads in the token for the bot hidden in a different file for specific reasons
-    with open('token.txt', 'r') as file:
-        token = file.read()
-    file.close()
+    token = os.getenv("TOKEN")
+    stopUser = int(os.getenv("STOP"))
+    notifications_channel = int(os.getenv("NOTIFICATIONS"))
+
     print(f'{Fore.BLUE}[LOG {dt.now().strftime("%Y-%m-%d %H:%M:%S")}]: Token Read')
-    with open('stop.txt', 'r') as file:
-        stopUser = int(file.read())
-    file.close()
     print(f'{Fore.BLUE}[LOG {dt.now().strftime("%Y-%m-%d %H:%M:%S")}]: Stop User Read')
-    with open('notifications_channel.txt', 'r') as file:
-        notifications_channel = int(file.read())
-    file.close()
     print(f'{Fore.BLUE}[LOG {dt.now().strftime("%Y-%m-%d %H:%M:%S")}]: Notifications Channel Read')
+    
     return [token, stopUser, notifications_channel]
 
 # Initializes the points when reading in from the file

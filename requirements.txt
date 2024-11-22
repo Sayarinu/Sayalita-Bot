@@ -1,0 +1,6 @@
+discord.py
+asyncio
+colorama
+pickle
+discord
+python-dotenv
